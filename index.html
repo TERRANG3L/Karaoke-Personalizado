@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Karaoke Avanzado con Efectos Visuales</title>
+    <style>     
+        :root {
+            --color-primario: #7FD1B9;
+            --color-secundario: #7A87B8;
+            --degradado-fondo: linear-gradient(135deg, #1A1E23 0%, #2D3250 100%);
+            --sombra-neon: 0 0 15px rgba(127,209,185,0.4);
+            --radio-bordes: 16px;
+            --transicion-rapida: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            background: var(--degradado-fondo);
+            color: #F0F4F8;
+            font-family: 'Inter', system-ui, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .contenedor-principal {
+            position: relative;
+            z-index: 2;
+            max-width: 1100px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: rgba(25, 28, 34, 0.95);
+            border-radius: var(--radio-bordes);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(127,209,185,0.1);
+            box-shadow: var(--sombra-neon);
+        }
+
+        .controles-carga {
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            margin-bottom: 3rem;
+        }
+
+        .input-archivo {
+            position: relative;
+            transition: var(--transicion-rapida);
+        }
+
+        .nombre-archivo {
+            padding: 1.5rem;
+            background: rgba(40, 44, 52, 0.8);
+            border-radius: calc(var(--radio-bordes) - 4px);
+            border: 2px dashed rgba(127,209,185,0.3);
+            cursor: pointer;
+            transition: var(--transicion-rapida);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nombre-archivo:hover {
+            background: rgba(50, 54, 63, 0.9);
+            border-color: var(--color-primario);
+            transform: translateY(-2px);
+        }
+
+        #contenedor-letras {
+            height: 60vh;
+            overflow-y: auto;
+            margin: 2rem 0;
+            border-radius: var(--radio-bordes);
+            background: rgba(15, 18, 22, 0.6);
+            scroll-behavior: smooth;
+            padding: 1rem;
+            position: relative;
+        }
+
+        .linea-letra {
+            padding: 1.5rem;
+            margin: 1rem 0;
+            opacity: 0.4;
+            transition: var(--transicion-rapida);
+            font-size: 1.5rem;
+            text-align: center;
+            transform: scale(0.95);
+            line-height: 1.6;
+            position: relative;
+            background: linear-gradient(90deg, transparent, rgba(127,209,185,0.05), transparent);
+        }
+
+        .linea-activa {
+            opacity: 1;
+            transform: scale(1.05);
+            color: var(--color-primario);
+            text-shadow: 0 0 25px rgba(127,209,185,0.3);
+            background: linear-gradient(90deg, transparent, rgba(127,209,185,0.1), transparent);
+        }
+
+        .visualizador-onda {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(to top, rgba(15,18,22,0.9) 30%, transparent);
+            z-index: 1;
+            mask-image: linear-gradient(to top, black 50%, transparent);
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 2rem;
+            filter: drop-shadow(var(--sombra-neon));
+        }
+
+        /* Efectos especiales */
+        .efecto-luz-ambiental {
+            position: fixed;
+            width: 200vw;
+            height: 200vh;
+            background: radial-gradient(circle at 50% 50%, 
+                rgba(127,209,185,0.05) 0%, 
+                rgba(25,28,34,0) 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @media (max-width: 768px) {
+            .contenedor-principal {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+            
+            .linea-letra {
+                font-size: 1.2rem;
+                padding: 1rem;
+            }
+            
+            .visualizador-onda {
+                height: 120px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="contenedor-principal">
+        <div class="controles-carga">
+            <label class="input-archivo">
+                <span>🎵 Audio (MP3/WAV)</span>
+                <input type="file" id="selector-audio" accept="audio/*">
+                <div class="nombre-archivo" id="nombre-audio">Seleccionar audio</div>
+            </label>
+            <label class="input-archivo">
+                <span>📝 Letra (TXT)</span>
+                <input type="file" id="selector-letra" accept=".txt">
+                <div class="nombre-archivo" id="nombre-letra">Seleccionar letra</div>
+            </label>
+        </div>
+        
+        <div id="contenedor-letras"></div>
+        <audio id="reproductor-audio" controls></audio>
+    </div>
+
+    <canvas class="visualizador-onda"></canvas>
+
+    <script>
+        const reproductor = document.getElementById('reproductor-audio');
+        const selectorAudio = document.getElementById('selector-audio');
+        const selectorLetra = document.getElementById('selector-letra');
+        const contenedorLetras = document.getElementById('contenedor-letras');
+        const nombreAudio = document.getElementById('nombre-audio');
+        const nombreLetra = document.getElementById('nombre-letra');
+        let lineasLetra = [];
+        let audioContext, analyser, dataArray;
+        let animacionId;
+
+        // Configuración del visualizador
+        const canvas = document.querySelector('.visualizador-onda');
+        const ctx = canvas.getContext('2d');
+
+        function configurarVisualizador() {
+            canvas.width = window.innerWidth;
+            canvas.height = 150;
+            
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaElementSource(reproductor);
+            analyser = audioContext.createAnalyser();
+            
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+            analyser.fftSize = 2048;
+            
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+        }
+
+        function dibujarVisualizacion() {
+            analyser.getByteFrequencyData(dataArray);
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const barWidth = (canvas.width / dataArray.length) * 2.5;
+            let x = 0;
+            
+            for(let i = 0; i < dataArray.length; i++) {
+                const barHeight = (dataArray[i] / 255) * canvas.height;
+                const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+                gradient.addColorStop(0, '#76b5c5');
+                gradient.addColorStop(1, '#1a5276');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                
+                x += barWidth + 1;
+            }
+            
+            animacionId = requestAnimationFrame(dibujarVisualizacion);
+        }
+
+        function procesarLetra(texto) {
+            lineasLetra = texto.split('\n').map(linea => {
+                const partes = linea.trim().split('|');
+                // Verificar que la línea tenga al menos 3 partes
+                if (partes.length < 3) {
+                    return null; // Retorna null si no es válida
+                }
+                return {
+                    inicio: convertirATiempoEnSegundos(partes[0]),
+                    fin: convertirATiempoEnSegundos(partes[1]),
+                    texto: partes[2] || ''
+                };
+            }).filter(linea => linea !== null); // Filtrar líneas no válidas
+            
+            contenedorLetras.innerHTML = lineasLetra
+                .map(linea => `<div class="linea-letra">${linea.texto}</div>`)
+                .join('');
+        }
+
+
+        function convertirATiempoEnSegundos(tiempo) {
+            const partes = tiempo.split(':');
+            const minutos = parseInt(partes[0]) || 0;
+            const segundos = parseFloat(partes[1]) || 0; // Cambiado a parseFloat para permitir decimales
+            return minutos * 60 + segundos;
+        }
+
+        // Manejo de archivos
+        selectorAudio.addEventListener('change', function(e) {
+            const archivo = e.target.files[0];
+            if (archivo) {
+                nombreAudio.textContent = archivo.name;
+                reproductor.src = URL.createObjectURL(archivo);
+            }
+        });
+
+        selectorLetra.addEventListener('change', function(e) {
+            const archivo = e.target.files[0];
+            if (archivo) {
+                nombreLetra.textContent = archivo.name;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    procesarLetra(e.target.result);
+                };
+                reader.readAsText(archivo);
+            }
+        });
+
+        // Sincronización de letras
+        function actualizarLetras() {
+            const tiempoActual = reproductor.currentTime;
+            const lineas = contenedorLetras.children;
+            
+            lineasLetra.forEach((linea, index) => {
+                const elemento = lineas[index];
+                if (tiempoActual >= linea.inicio && tiempoActual <= linea.fin) {
+                    elemento.classList.add('linea-activa');
+                    // Scroll suave
+                    elemento.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                } else {
+                    elemento.classList.remove('linea-activa');
+                }
+            });
+            
+            requestAnimationFrame(actualizarLetras);
+        }
+
+        // Event listeners
+        reproductor.addEventListener('play', () => {
+            if (!audioContext) configurarVisualizador();
+            dibujarVisualizacion();
+            requestAnimationFrame(actualizarLetras);
+        });
+
+        reproductor.addEventListener('pause', () => {
+            cancelAnimationFrame(animacionId);
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+        });
+    </script>
+</body>
+</html>
