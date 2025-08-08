@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <link rel="Shorcut icon" href="icon.png">
     <meta charset="UTF-8">
-    <title>Karaoke</title>
+    <title>Karaoke Avanzado con Efectos Visuales</title>
     <style>     
         :root {
             --color-primario: #7FD1B9;
@@ -116,16 +115,92 @@
             filter: drop-shadow(var(--sombra-neon));
         }
 
-        /* Efectos especiales */
-        .efecto-luz-ambiental {
+        /* === SISTEMA DE AYUDA === */
+        .flotante-ayuda {
             position: fixed;
-            width: 200vw;
-            height: 200vh;
-            background: radial-gradient(circle at 50% 50%, 
-                rgba(127,209,185,0.05) 0%, 
-                rgba(25,28,34,0) 70%);
-            pointer-events: none;
-            z-index: 0;
+            bottom: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--color-primario);
+            color: #1A1E23;
+            font-size: 1.8rem;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 5px 25px rgba(127,209,185,0.3);
+            transition: var(--transicion-rapida);
+            z-index: 1000;
+        }
+
+        .flotante-ayuda:hover {
+            transform: scale(1.15) rotate(360deg);
+            box-shadow: 0 8px 30px rgba(127,209,185,0.5);
+        }
+
+        .modal-guia {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 18, 22, 0.95);
+            backdrop-filter: blur(10px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .contenido-modal {
+            background: rgba(25, 28, 34, 0.98);
+            padding: 2.5rem;
+            border-radius: var(--radio-bordes);
+            max-width: 600px;
+            position: relative;
+            border: 1px solid var(--color-primario);
+            box-shadow: var(--sombra-neon);
+        }
+
+        .pasos-guia {
+            display: grid;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .paso {
+            display: flex;
+            gap: 1rem;
+            align-items: start;
+            padding: 1.2rem;
+            background: rgba(40, 44, 52, 0.6);
+            border-radius: 12px;
+        }
+
+        .icono {
+            font-size: 1.4rem;
+            background: var(--color-primario);
+            color: #1A1E23;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .boton-cerrar {
+            background: var(--color-primario);
+            color: #1A1E23;
+            padding: 0.8rem 2rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: var(--transicion-rapida);
+            float: right;
         }
 
         @media (max-width: 768px) {
@@ -141,6 +216,19 @@
             
             .visualizador-onda {
                 height: 120px;
+            }
+
+            .contenido-modal {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+            
+            .flotante-ayuda {
+                bottom: 20px;
+                right: 20px;
+                width: 45px;
+                height: 45px;
+                font-size: 1.6rem;
             }
         }
     </style>
@@ -165,6 +253,33 @@
     </div>
 
     <canvas class="visualizador-onda"></canvas>
+
+    <!-- Sistema de Ayuda -->
+    <div id="modal-guia" class="modal-guia">
+        <div class="contenido-modal">
+            <h2>🎤 Guía Rápida</h2>
+            <div class="pasos-guia">
+                <div class="paso">
+                    <span class="icono">①</span>
+                    <p><strong>Carga tus archivos:</strong> Selecciona audio (MP3/WAV) y letra en formato TXT con marcas de tiempo</p>
+                </div>
+                <div class="paso">
+                    <span class="icono">②</span>
+                    <p><strong>Formato de letra:</strong> Usa <code>mm:ss|mm:ss|Texto</code> (ej: 1:23|1:45|Esto es una prueba)</p>
+                </div>
+                <div class="paso">
+                    <span class="icono">③</span>
+                    <p><strong>Controles:</strong> Usa el reproductor estándar para play/pause. Las letras se sincronizan automáticamente</p>
+                </div>
+                <div class="paso">
+                    <span class="icono">④</span>
+                    <p><strong>Efectos visuales:</strong> La onda inferior reacciona en tiempo real al audio</p>
+                </div>
+            </div>
+            <button id="cerrar-modal" class="boton-cerrar">× Entendido</button>
+        </div>
+    </div>
+    <button id="boton-ayuda" class="flotante-ayuda">?</button>
 
     <script>
         const reproductor = document.getElementById('reproductor-audio');
@@ -223,27 +338,23 @@
         function procesarLetra(texto) {
             lineasLetra = texto.split('\n').map(linea => {
                 const partes = linea.trim().split('|');
-                // Verificar que la línea tenga al menos 3 partes
-                if (partes.length < 3) {
-                    return null; // Retorna null si no es válida
-                }
+                if (partes.length < 3) return null;
                 return {
                     inicio: convertirATiempoEnSegundos(partes[0]),
                     fin: convertirATiempoEnSegundos(partes[1]),
                     texto: partes[2] || ''
                 };
-            }).filter(linea => linea !== null); // Filtrar líneas no válidas
+            }).filter(linea => linea !== null);
             
             contenedorLetras.innerHTML = lineasLetra
                 .map(linea => `<div class="linea-letra">${linea.texto}</div>`)
                 .join('');
         }
 
-
         function convertirATiempoEnSegundos(tiempo) {
             const partes = tiempo.split(':');
             const minutos = parseInt(partes[0]) || 0;
-            const segundos = parseFloat(partes[1]) || 0; // Cambiado a parseFloat para permitir decimales
+            const segundos = parseFloat(partes[1]) || 0;
             return minutos * 60 + segundos;
         }
 
@@ -277,11 +388,7 @@
                 const elemento = lineas[index];
                 if (tiempoActual >= linea.inicio && tiempoActual <= linea.fin) {
                     elemento.classList.add('linea-activa');
-                    // Scroll suave
-                    elemento.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center'
-                    });
+                    elemento.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 } else {
                     elemento.classList.remove('linea-activa');
                 }
@@ -304,8 +411,22 @@
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
         });
+
+        // Sistema de Ayuda - Funcionalidad
+        const botonAyuda = document.getElementById('boton-ayuda');
+        const modalGuia = document.getElementById('modal-guia');
+        const botonCerrar = document.getElementById('cerrar-modal');
+
+        botonAyuda.addEventListener('click', () => modalGuia.style.display = 'flex');
+        botonCerrar.addEventListener('click', () => modalGuia.style.display = 'none');
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === modalGuia) modalGuia.style.display = 'none';
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') modalGuia.style.display = 'none';
+        });
     </script>
 </body>
 </html>
-
-
